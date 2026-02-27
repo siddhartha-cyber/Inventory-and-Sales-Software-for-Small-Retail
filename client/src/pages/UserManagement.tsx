@@ -1,13 +1,30 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, FormEvent } from 'react';
 import api from '../api';
 import { Plus, Edit2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { AxiosError } from 'axios';
+
+interface User {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+  status: string;
+  created_at: string;
+}
+
+interface UserForm {
+  name: string;
+  email: string;
+  password: string;
+  role: string;
+}
 
 export default function UserManagement() {
-  const [users, setUsers] = useState([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [showModal, setShowModal] = useState(false);
-  const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'sales' });
+  const [editing, setEditing] = useState<User | null>(null);
+  const [form, setForm] = useState<UserForm>({ name: '', email: '', password: '', role: 'sales' });
 
   const loadUsers = () => api.get('/users').then((r) => setUsers(r.data));
 
@@ -19,16 +36,16 @@ export default function UserManagement() {
     setShowModal(true);
   };
 
-  const openEdit = (u) => {
+  const openEdit = (u: User) => {
     setEditing(u);
     setForm({ name: u.name, email: u.email, password: '', role: u.role });
     setShowModal(true);
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     try {
-      const payload = { ...form };
+      const payload: Record<string, string> = { ...form };
       if (editing && !payload.password) delete payload.password;
 
       if (editing) {
@@ -42,11 +59,12 @@ export default function UserManagement() {
       setShowModal(false);
       loadUsers();
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to save user');
+      const axiosErr = err as AxiosError<{ error?: string }>;
+      toast.error(axiosErr.response?.data?.error || 'Failed to save user');
     }
   };
 
-  const toggleStatus = async (u) => {
+  const toggleStatus = async (u: User) => {
     const newStatus = u.status === 'active' ? 'inactive' : 'active';
     await api.put(`/users/${u.id}`, { status: newStatus });
     toast.success(`User ${newStatus === 'active' ? 'activated' : 'deactivated'}`);

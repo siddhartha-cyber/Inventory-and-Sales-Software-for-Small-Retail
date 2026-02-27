@@ -1,10 +1,10 @@
-import axios from 'axios';
+import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 
 const api = axios.create({
   baseURL: '/api',
 });
 
-api.interceptors.request.use((config) => {
+api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   const token = localStorage.getItem('token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -14,7 +14,7 @@ api.interceptors.request.use((config) => {
 
 api.interceptors.response.use(
   (res) => res,
-  (err) => {
+  (err: AxiosError) => {
     // Only auto-redirect on 401 if NOT on the login page and NOT a login request
     if (err.response?.status === 401) {
       const isLoginRequest = err.config?.url?.includes('/auth/login');

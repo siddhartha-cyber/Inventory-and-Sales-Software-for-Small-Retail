@@ -1,20 +1,37 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, FormEvent, ReactNode } from 'react';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
 import { AlertTriangle, PackageX, PackageCheck, X } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { AxiosError } from 'axios';
+
+interface StockItem {
+  id: number;
+  name: string;
+  sku: string;
+  category_name: string | null;
+  stock_qty: number;
+  reorder_level: number;
+  stock_status: 'in_stock' | 'low_stock' | 'out_of_stock';
+}
+
+interface Category {
+  id: number;
+  name: string;
+  status: string;
+}
 
 export default function Inventory() {
   const { isAdmin } = useAuth();
-  const [stock, setStock] = useState([]);
-  const [categories, setCategories] = useState([]);
+  const [stock, setStock] = useState<StockItem[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [filter, setFilter] = useState('');
   const [catFilter, setCatFilter] = useState('');
-  const [showAdjust, setShowAdjust] = useState(null);
+  const [showAdjust, setShowAdjust] = useState<StockItem | null>(null);
   const [adjustForm, setAdjustForm] = useState({ quantity_change: '', reason: '' });
 
   const loadStock = () => {
-    const params = {};
+    const params: Record<string, string> = {};
     if (filter) params.status = filter;
     if (catFilter) params.category_id = catFilter;
     api.get('/inventory/stock', { params }).then((r) => setStock(r.data));
@@ -22,14 +39,14 @@ export default function Inventory() {
 
   useEffect(() => {
     loadStock();
-    api.get('/categories').then((r) => setCategories(r.data.filter(c => c.status === 'active')));
+    api.get('/categories').then((r) => setCategories(r.data.filter((c: Category) => c.status === 'active')));
   }, [filter, catFilter]);
 
-  const handleAdjust = async (e) => {
+  const handleAdjust = async (e: FormEvent) => {
     e.preventDefault();
     try {
       await api.post('/inventory/adjust', {
-        product_id: showAdjust.id,
+        product_id: showAdjust!.id,
         quantity_change: parseInt(adjustForm.quantity_change),
         reason: adjustForm.reason,
       });
@@ -38,23 +55,24 @@ export default function Inventory() {
       setAdjustForm({ quantity_change: '', reason: '' });
       loadStock();
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Adjustment failed');
+      const axiosErr = err as AxiosError<{ error?: string }>;
+      toast.error(axiosErr.response?.data?.error || 'Adjustment failed');
     }
   };
 
-  const statusIcon = (s) => {
+  const statusIcon = (s: string): ReactNode => {
     if (s === 'out_of_stock') return <PackageX size={16} className="text-red-500" />;
     if (s === 'low_stock') return <AlertTriangle size={16} className="text-amber-500" />;
     return <PackageCheck size={16} className="text-green-500" />;
   };
 
-  const statusBadge = (s) => {
-    const map = {
+  const statusBadge = (s: string): ReactNode => {
+    const map: Record<string, string> = {
       in_stock: 'bg-green-100 text-green-700',
       low_stock: 'bg-amber-100 text-amber-700',
       out_of_stock: 'bg-red-100 text-red-700',
     };
-    const labels = { in_stock: 'In Stock', low_stock: 'Low Stock', out_of_stock: 'Out of Stock' };
+    const labels: Record<string, string> = { in_stock: 'In Stock', low_stock: 'Low Stock', out_of_stock: 'Out of Stock' };
     return <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${map[s]}`}>{statusIcon(s)} {labels[s]}</span>;
   };
 

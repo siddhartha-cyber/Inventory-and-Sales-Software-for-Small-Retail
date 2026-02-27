@@ -2,11 +2,18 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
   LayoutDashboard, Package, Warehouse, ShoppingCart, BarChart3,
-  Users, LogOut, Menu, X, ChevronDown
+  Users, LogOut, Menu, X, ChevronDown, LucideIcon
 } from 'lucide-react';
 import { useState } from 'react';
 
-const navItems = [
+interface NavItem {
+  to: string;
+  icon: LucideIcon;
+  label: string;
+  roles: string[];
+}
+
+const navItems: NavItem[] = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard', roles: ['admin', 'sales'] },
   { to: '/products', icon: Package, label: 'Products', roles: ['admin', 'sales'] },
   { to: '/inventory', icon: Warehouse, label: 'Inventory', roles: ['admin', 'sales'] },
@@ -25,7 +32,7 @@ export default function Layout() {
     navigate('/login');
   };
 
-  const filteredNav = navItems.filter((item) => item.roles.includes(user?.role));
+  const filteredNav = navItems.filter((item) => item.roles.includes(user?.role || ''));
 
   return (
     <div className="flex h-screen bg-gray-50">

@@ -3,6 +3,45 @@ import api from '../api';
 import { Download, Calendar, Filter } from 'lucide-react';
 import toast from 'react-hot-toast';
 
+interface DailySalesData {
+  date: string;
+  summary: { transaction_count: number; total_revenue: number; total_tax: number };
+  bills: Array<{ id: number; bill_number: string; sale_date: string; total: number; payment_method: string; cashier_name: string }>;
+}
+
+interface MonthlySalesData {
+  month: string;
+  summary: { transaction_count: number; total_revenue: number; total_tax: number };
+  dailyTotals: Array<{ date: string; transactions: number; revenue: number }>;
+}
+
+interface ProductSalesItem {
+  id: number;
+  name: string;
+  sku: string;
+  category_name: string | null;
+  units_sold: number;
+  revenue: number;
+}
+
+interface StockReportItem {
+  id: number;
+  name: string;
+  sku: string;
+  category_name: string | null;
+  stock_qty: number;
+  reorder_level: number;
+  stock_status: string;
+}
+
+interface Category {
+  id: number;
+  name: string;
+  status: string;
+}
+
+type ReportData = DailySalesData | MonthlySalesData | ProductSalesItem[] | StockReportItem[];
+
 export default function Reports() {
   const [activeTab, setActiveTab] = useState('daily');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -10,13 +49,13 @@ export default function Reports() {
   const [year, setYear] = useState(String(new Date().getFullYear()));
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [categories, setCategories] = useState([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [catFilter, setCatFilter] = useState('');
-  const [reportData, setReportData] = useState(null);
+  const [reportData, setReportData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    api.get('/categories').then((r) => setCategories(r.data.filter(c => c.status === 'active')));
+    api.get('/categories').then((r) => setCategories(r.data.filter((c: Category) => c.status === 'active')));
   }, []);
 
   const loadReport = async () => {
@@ -37,7 +76,7 @@ export default function Reports() {
           res = await api.get('/reports/stock', { params: { category_id: catFilter || undefined } });
           break;
       }
-      setReportData(res.data);
+      setReportData(res!.data);
     } catch {
       toast.error('Failed to load report');
     }
@@ -46,7 +85,7 @@ export default function Reports() {
 
   useEffect(() => { loadReport(); }, [activeTab]);
 
-  const exportReport = (format) => {
+  const exportReport = (format: string) => {
     const token = localStorage.getItem('token');
     let url = '';
     switch (activeTab) {
@@ -161,17 +200,17 @@ export default function Reports() {
         <div className="flex justify-center py-12"><div className="animate-spin h-8 w-8 border-4 border-indigo-500 border-t-transparent rounded-full" /></div>
       ) : reportData && (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          {activeTab === 'daily' && <DailySalesReport data={reportData} />}
-          {activeTab === 'monthly' && <MonthlySalesReport data={reportData} />}
-          {activeTab === 'product' && <ProductSalesReport data={reportData} />}
-          {activeTab === 'stock' && <StockReport data={reportData} />}
+          {activeTab === 'daily' && <DailySalesReport data={reportData as DailySalesData} />}
+          {activeTab === 'monthly' && <MonthlySalesReport data={reportData as MonthlySalesData} />}
+          {activeTab === 'product' && <ProductSalesReport data={reportData as ProductSalesItem[]} />}
+          {activeTab === 'stock' && <StockReport data={reportData as StockReportItem[]} />}
         </div>
       )}
     </div>
   );
 }
 
-function DailySalesReport({ data }) {
+function DailySalesReport({ data }: { data: DailySalesData }) {
   return (
     <div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 bg-gray-50 border-b">
@@ -200,7 +239,7 @@ function DailySalesReport({ data }) {
   );
 }
 
-function MonthlySalesReport({ data }) {
+function MonthlySalesReport({ data }: { data: MonthlySalesData }) {
   return (
     <div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 bg-gray-50 border-b">
@@ -228,7 +267,7 @@ function MonthlySalesReport({ data }) {
   );
 }
 
-function ProductSalesReport({ data }) {
+function ProductSalesReport({ data }: { data: ProductSalesItem[] }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
@@ -249,7 +288,7 @@ function ProductSalesReport({ data }) {
   );
 }
 
-function StockReport({ data }) {
+function StockReport({ data }: { data: StockReportItem[] }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">

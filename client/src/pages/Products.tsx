@@ -1,21 +1,53 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, FormEvent } from 'react';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
 import { Plus, Search, Edit2, X, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { AxiosError } from 'axios';
+
+interface Product {
+  id: number;
+  name: string;
+  sku: string;
+  category_id: number | null;
+  category_name: string | null;
+  purchase_price: number;
+  selling_price: number;
+  tax_pct: number;
+  stock_qty: number;
+  reorder_level: number;
+  status: string;
+}
+
+interface Category {
+  id: number;
+  name: string;
+  status: string;
+}
+
+interface ProductForm {
+  name: string;
+  category_id: string;
+  sku: string;
+  purchase_price: string;
+  selling_price: string;
+  tax_pct: string;
+  stock_qty: string;
+  reorder_level: string;
+}
 
 export default function Products() {
   const { isAdmin } = useAuth();
-  const [products, setProducts] = useState([]);
-  const [categories, setCategories] = useState([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [search, setSearch] = useState('');
   const [filterCat, setFilterCat] = useState('');
   const [showModal, setShowModal] = useState(false);
-  const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ name: '', category_id: '', sku: '', purchase_price: '', selling_price: '', tax_pct: '', stock_qty: '', reorder_level: '10' });
+  const [editing, setEditing] = useState<Product | null>(null);
+  const [form, setForm] = useState<ProductForm>({ name: '', category_id: '', sku: '', purchase_price: '', selling_price: '', tax_pct: '', stock_qty: '', reorder_level: '10' });
 
   const loadProducts = () => {
-    const params = {};
+    const params: Record<string, string> = {};
     if (search) params.search = search;
     if (filterCat) params.category_id = filterCat;
     api.get('/products', { params }).then((r) => setProducts(r.data));
@@ -23,7 +55,7 @@ export default function Products() {
 
   useEffect(() => {
     loadProducts();
-    api.get('/categories').then((r) => setCategories(r.data.filter(c => c.status === 'active')));
+    api.get('/categories').then((r) => setCategories(r.data.filter((c: Category) => c.status === 'active')));
   }, [search, filterCat]);
 
   const openNew = () => {
@@ -32,17 +64,17 @@ export default function Products() {
     setShowModal(true);
   };
 
-  const openEdit = (p) => {
+  const openEdit = (p: Product) => {
     setEditing(p);
     setForm({
-      name: p.name, category_id: p.category_id || '', sku: p.sku,
-      purchase_price: p.purchase_price, selling_price: p.selling_price,
-      tax_pct: p.tax_pct, stock_qty: p.stock_qty, reorder_level: p.reorder_level
+      name: p.name, category_id: p.category_id ? String(p.category_id) : '', sku: p.sku,
+      purchase_price: String(p.purchase_price), selling_price: String(p.selling_price),
+      tax_pct: String(p.tax_pct), stock_qty: String(p.stock_qty), reorder_level: String(p.reorder_level)
     });
     setShowModal(true);
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     const payload = {
       ...form,
@@ -65,11 +97,12 @@ export default function Products() {
       setShowModal(false);
       loadProducts();
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to save product');
+      const axiosErr = err as AxiosError<{ error?: string }>;
+      toast.error(axiosErr.response?.data?.error || 'Failed to save product');
     }
   };
 
-  const toggleStatus = async (p) => {
+  const toggleStatus = async (p: Product) => {
     const newStatus = p.status === 'active' ? 'inactive' : 'active';
     await api.put(`/products/${p.id}`, { status: newStatus });
     toast.success(`Product ${newStatus === 'active' ? 'activated' : 'deactivated'}`);

@@ -1,10 +1,40 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api';
-import { Package, AlertTriangle, DollarSign, TrendingUp, ShoppingCart, ArrowRight } from 'lucide-react';
+import { Package, AlertTriangle, DollarSign, TrendingUp, ShoppingCart, ArrowRight, LucideIcon } from 'lucide-react';
+
+interface DashboardData {
+  totalProducts: number;
+  lowStockItems: number;
+  todaySales: number;
+  monthlySales: number;
+  recentSales: Array<{
+    id: number;
+    bill_number: string;
+    cashier_name: string;
+    sale_date: string;
+    total: number;
+  }>;
+  lowStockProducts: Array<{
+    id: number;
+    name: string;
+    sku: string;
+    category_name: string | null;
+    stock_qty: number;
+    reorder_level: number;
+  }>;
+}
+
+interface CardItem {
+  label: string;
+  value: string | number;
+  icon: LucideIcon;
+  color: string;
+  link: string;
+}
 
 export default function Dashboard() {
-  const [data, setData] = useState(null);
+  const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -17,7 +47,7 @@ export default function Dashboard() {
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin h-8 w-8 border-4 border-indigo-500 border-t-transparent rounded-full" /></div>;
   if (!data) return <p className="text-gray-500">Failed to load dashboard data.</p>;
 
-  const cards = [
+  const cards: CardItem[] = [
     { label: 'Total Products', value: data.totalProducts, icon: Package, color: 'bg-blue-500', link: '/products' },
     { label: 'Low Stock Items', value: data.lowStockItems, icon: AlertTriangle, color: 'bg-amber-500', link: '/inventory' },
     { label: "Today's Sales", value: `$${data.todaySales.toFixed(2)}`, icon: DollarSign, color: 'bg-green-500', link: '/sales' },

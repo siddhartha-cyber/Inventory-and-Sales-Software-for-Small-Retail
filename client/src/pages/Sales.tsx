@@ -3,21 +3,71 @@ import api from '../api';
 import { useAuth } from '../context/AuthContext';
 import { Plus, Search, FileText, XCircle, Download, X, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { AxiosError } from 'axios';
+
+interface Bill {
+  id: number;
+  bill_number: string;
+  sale_date: string;
+  total: number;
+  payment_method: string;
+  payment_status: string;
+  status: string;
+  cashier_name: string;
+}
+
+interface BillDetail extends Bill {
+  subtotal: number;
+  tax_amount: number;
+  discount: number;
+  items: Array<{
+    product_name: string;
+    quantity: number;
+    unit_price: number;
+    line_total: number;
+  }>;
+}
+
+interface SearchProduct {
+  id: number;
+  name: string;
+  sku: string;
+  selling_price: number;
+  tax_pct: number;
+  stock_qty: number;
+}
+
+interface CartItem {
+  product_id: number;
+  name: string;
+  sku: string;
+  unit_price: number;
+  tax_pct: number;
+  quantity: number;
+  max_qty: number;
+}
+
+interface PaymentState {
+  method: string;
+  status: string;
+  discount: string;
+  discount_type: string;
+}
 
 export default function Sales() {
   const { isAdmin } = useAuth();
-  const [bills, setBills] = useState([]);
+  const [bills, setBills] = useState<Bill[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(1);
   const [showNew, setShowNew] = useState(false);
-  const [showDetail, setShowDetail] = useState(null);
+  const [showDetail, setShowDetail] = useState<BillDetail | null>(null);
 
   // New sale state
-  const [products, setProducts] = useState([]);
+  const [products, setProducts] = useState<SearchProduct[]>([]);
   const [productSearch, setProductSearch] = useState('');
-  const [cart, setCart] = useState([]);
-  const [payment, setPayment] = useState({ method: 'cash', status: 'paid', discount: '', discount_type: 'flat' });
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [payment, setPayment] = useState<PaymentState>({ method: 'cash', status: 'paid', discount: '', discount_type: 'flat' });
 
   const loadBills = () => {
     api.get('/sales', { params: { page, limit: 15 } }).then((r) => {
@@ -40,7 +90,7 @@ export default function Sales() {
     }
   }, [productSearch, showNew]);
 
-  const addToCart = (product) => {
+  const addToCart = (product: SearchProduct) => {
     if (product.stock_qty <= 0) return toast.error('Product is out of stock');
     const existing = cart.find((c) => c.product_id === product.id);
     if (existing) {
@@ -57,13 +107,13 @@ export default function Sales() {
     setProducts([]);
   };
 
-  const updateQty = (idx, qty) => {
+  const updateQty = (idx: number, qty: number) => {
     if (qty < 1) return;
     if (qty > cart[idx].max_qty) return toast.error('Exceeds available stock');
     setCart(cart.map((c, i) => i === idx ? { ...c, quantity: qty } : c));
   };
 
-  const removeFromCart = (idx) => setCart(cart.filter((_, i) => i !== idx));
+  const removeFromCart = (idx: number) => setCart(cart.filter((_, i) => i !== idx));
 
   const subtotal = cart.reduce((s, c) => s + c.unit_price * c.quantity, 0);
   const taxTotal = cart.reduce((s, c) => s + (c.unit_price * c.quantity * c.tax_pct / 100), 0);
@@ -88,16 +138,17 @@ export default function Sales() {
       setPayment({ method: 'cash', status: 'paid', discount: '', discount_type: 'flat' });
       loadBills();
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Sale failed');
+      const axiosErr = err as AxiosError<{ error?: string }>;
+      toast.error(axiosErr.response?.data?.error || 'Sale failed');
     }
   };
 
-  const viewBill = async (id) => {
+  const viewBill = async (id: number) => {
     const res = await api.get(`/sales/${id}`);
     setShowDetail(res.data);
   };
 
-  const cancelBill = async (id) => {
+  const cancelBill = async (id: number) => {
     if (!confirm('Cancel this bill? Stock will be reversed.')) return;
     try {
       await api.post(`/sales/${id}/cancel`);
@@ -105,11 +156,12 @@ export default function Sales() {
       setShowDetail(null);
       loadBills();
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Cancellation failed');
+      const axiosErr = err as AxiosError<{ error?: string }>;
+      toast.error(axiosErr.response?.data?.error || 'Cancellation failed');
     }
   };
 
-  const downloadReceipt = (billId) => {
+  const downloadReceipt = (billId: number) => {
     const token = localStorage.getItem('token');
     window.open(`/api/receipts/${billId}?token=${token}`, '_blank');
   };

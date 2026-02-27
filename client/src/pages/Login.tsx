@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { LogIn } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { AxiosError } from 'axios';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -11,7 +12,7 @@ export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
@@ -19,7 +20,8 @@ export default function Login() {
       toast.success('Welcome back!');
       navigate('/');
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Login failed');
+      const axiosErr = err as AxiosError<{ error?: string }>;
+      toast.error(axiosErr.response?.data?.error || 'Login failed');
     } finally {
       setLoading(false);
     }
@@ -31,7 +33,7 @@ export default function Login() {
         <div className="bg-white rounded-2xl shadow-xl p-8">
           <div className="text-center mb-8">
             <div className="w-16 h-16 bg-indigo-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <Package size={32} className="text-indigo-600" />
+              <PackageIcon size={32} className="text-indigo-600" />
             </div>
             <h1 className="text-2xl font-bold text-gray-900">StockManager</h1>
             <p className="text-gray-500 mt-1">Inventory & Sales Management</p>
@@ -81,7 +83,7 @@ export default function Login() {
   );
 }
 
-function Package({ size, className }) {
+function PackageIcon({ size, className }: { size: number; className?: string }) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
       <path d="M16.5 9.4 7.55 4.24" /><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" /><polyline points="3.29 7 12 12 20.71 7" /><line x1="12" y1="22" x2="12" y2="12" />
