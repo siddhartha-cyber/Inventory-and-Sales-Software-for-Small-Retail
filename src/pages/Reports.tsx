@@ -1,0 +1,340 @@
+import { useState, useEffect } from 'react';
+import api from '../api';
+import { Download, Filter } from 'lucide-react';
+import toast from 'react-hot-toast';
+
+interface DailySalesData {
+  date: string;
+  summary: { transaction_count: number; total_revenue: number; total_tax: number };
+  bills: Array<{ id: number; bill_number: string; sale_date: string; total: number; payment_method: string; cashier_name: string }>;
+}
+
+interface MonthlySalesData {
+  month: string;
+  summary: { transaction_count: number; total_revenue: number; total_tax: number };
+  dailyTotals: Array<{ date: string; transactions: number; revenue: number }>;
+}
+
+interface ProductSalesItem {
+  id: number;
+  name: string;
+  sku: string;
+  category_name: string | null;
+  units_sold: number;
+  revenue: number;
+}
+
+interface StockReportItem {
+  id: number;
+  name: string;
+  sku: string;
+  category_name: string | null;
+  stock_qty: number;
+  reorder_level: number;
+  stock_status: string;
+}
+
+interface Category {
+  id: number;
+  name: string;
+  status: string;
+}
+
+type ReportData = DailySalesData | MonthlySalesData | ProductSalesItem[] | StockReportItem[];
+
+function downloadCSV(filename: string, csv: string) {
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export default function Reports() {
+  const [activeTab, setActiveTab] = useState('daily');
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [month, setMonth] = useState(String(new Date().getMonth() + 1).padStart(2, '0'));
+  const [year, setYear] = useState(String(new Date().getFullYear()));
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [catFilter, setCatFilter] = useState('');
+  const [reportData, setReportData] = useState<ReportData | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    api.get('/categories').then((r) => setCategories((r.data as Category[]).filter((c) => c.status === 'active')));
+  }, []);
+
+  const loadReport = async () => {
+    setLoading(true);
+    try {
+      let res;
+      switch (activeTab) {
+        case 'daily':
+          res = await api.get('/reports/daily-sales', { params: { date } });
+          break;
+        case 'monthly':
+          res = await api.get('/reports/monthly-sales', { params: { month, year } });
+          break;
+        case 'product':
+          res = await api.get('/reports/product-sales', { params: { start_date: startDate, end_date: endDate, category_id: catFilter || undefined } as Record<string, string> });
+          break;
+        case 'stock':
+          res = await api.get('/reports/stock', { params: { category_id: catFilter || undefined } as Record<string, string> });
+          break;
+      }
+      setReportData(res!.data as ReportData);
+    } catch {
+      toast.error('Failed to load report');
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => { loadReport(); }, [activeTab]);
+
+  const exportReport = () => {
+    if (!reportData) return toast.error('Generate the report first');
+    let csv = '';
+    let filename = '';
+
+    switch (activeTab) {
+      case 'daily': {
+        const d = reportData as DailySalesData;
+        csv = 'Bill #,Time,Total,Payment,Cashier\n';
+        csv += d.bills.map(b => `${b.bill_number},${new Date(b.sale_date).toLocaleTimeString()},${b.total.toFixed(2)},${b.payment_method},${b.cashier_name}`).join('\n');
+        filename = `daily-sales-${d.date}.csv`;
+        break;
+      }
+      case 'product': {
+        const d = reportData as ProductSalesItem[];
+        csv = 'Product,SKU,Category,Units Sold,Revenue\n';
+        csv += d.map(p => `"${p.name}",${p.sku},"${p.category_name || '-'}",${p.units_sold},${p.revenue.toFixed(2)}`).join('\n');
+        filename = `product-sales.csv`;
+        break;
+      }
+      case 'stock': {
+        const d = reportData as StockReportItem[];
+        csv = 'Product,SKU,Category,Stock,Reorder Level,Status\n';
+        csv += d.map(p => `"${p.name}",${p.sku},"${p.category_name || '-'}",${p.stock_qty},${p.reorder_level},"${p.stock_status}"`).join('\n');
+        filename = `stock-report.csv`;
+        break;
+      }
+      default:
+        return toast.error('Export not available for this report');
+    }
+
+    downloadCSV(filename, csv);
+    toast.success('Report exported');
+  };
+
+  const tabs = [
+    { id: 'daily', label: 'Daily Sales' },
+    { id: 'monthly', label: 'Monthly Sales' },
+    { id: 'product', label: 'Product Sales' },
+    { id: 'stock', label: 'Stock Report' },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <h1 className="text-2xl font-bold text-gray-900">Reports</h1>
+
+      {/* Tabs */}
+      <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-fit">
+        {tabs.map((tab) => (
+          <button key={tab.id} onClick={() => { setActiveTab(tab.id); setReportData(null); }}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition ${activeTab === tab.id ? 'bg-white shadow text-indigo-700' : 'text-gray-600 hover:text-gray-900'}`}>
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Filters */}
+      <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <div className="flex flex-wrap items-end gap-3">
+          {activeTab === 'daily' && (
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Date</label>
+              <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+            </div>
+          )}
+          {activeTab === 'monthly' && (
+            <>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Month</label>
+                <select value={month} onChange={(e) => setMonth(e.target.value)} className="px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                  {Array.from({ length: 12 }, (_, i) => (
+                    <option key={i} value={String(i + 1).padStart(2, '0')}>
+                      {new Date(2000, i).toLocaleString('default', { month: 'long' })}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Year</label>
+                <input type="number" value={year} onChange={(e) => setYear(e.target.value)}
+                  className="w-24 px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+              </div>
+            </>
+          )}
+          {activeTab === 'product' && (
+            <>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Start Date</label>
+                <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">End Date</label>
+                <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+              </div>
+            </>
+          )}
+          {(activeTab === 'product' || activeTab === 'stock') && (
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Category</label>
+              <select value={catFilter} onChange={(e) => setCatFilter(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                <option value="">All</option>
+                {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+          )}
+          <button onClick={loadReport} className="px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700">
+            <Filter size={16} className="inline mr-1" /> Generate
+          </button>
+          {['daily', 'stock', 'product'].includes(activeTab) && (
+            <div className="ml-auto">
+              <button onClick={exportReport} className="px-3 py-2 border border-gray-300 text-sm rounded-lg hover:bg-gray-50 flex items-center gap-1">
+                <Download size={14} /> Export CSV
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Report Content */}
+      {loading ? (
+        <div className="flex justify-center py-12"><div className="animate-spin h-8 w-8 border-4 border-indigo-500 border-t-transparent rounded-full" /></div>
+      ) : reportData && (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          {activeTab === 'daily' && <DailySalesReport data={reportData as DailySalesData} />}
+          {activeTab === 'monthly' && <MonthlySalesReport data={reportData as MonthlySalesData} />}
+          {activeTab === 'product' && <ProductSalesReport data={reportData as ProductSalesItem[]} />}
+          {activeTab === 'stock' && <StockReport data={reportData as StockReportItem[]} />}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DailySalesReport({ data }: { data: DailySalesData }) {
+  return (
+    <div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 bg-gray-50 border-b">
+        <div><p className="text-xs text-gray-500">Date</p><p className="font-semibold">{data.date}</p></div>
+        <div><p className="text-xs text-gray-500">Transactions</p><p className="font-semibold">{data.summary.transaction_count}</p></div>
+        <div><p className="text-xs text-gray-500">Revenue</p><p className="font-semibold">${data.summary.total_revenue.toFixed(2)}</p></div>
+        <div><p className="text-xs text-gray-500">Tax Collected</p><p className="font-semibold">${data.summary.total_tax.toFixed(2)}</p></div>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 border-b"><tr>
+            <th className="text-left px-4 py-2">Bill #</th><th className="text-left px-4 py-2">Time</th>
+            <th className="text-right px-4 py-2">Total</th><th className="text-center px-4 py-2">Payment</th><th className="text-left px-4 py-2">Cashier</th>
+          </tr></thead>
+          <tbody className="divide-y divide-gray-100">
+            {data.bills.map((b) => (
+              <tr key={b.id}><td className="px-4 py-2">{b.bill_number}</td><td className="px-4 py-2">{new Date(b.sale_date).toLocaleTimeString()}</td>
+                <td className="px-4 py-2 text-right font-medium">${b.total.toFixed(2)}</td><td className="px-4 py-2 text-center capitalize">{b.payment_method}</td>
+                <td className="px-4 py-2">{b.cashier_name}</td></tr>
+            ))}
+            {data.bills.length === 0 && <tr><td colSpan={5} className="px-4 py-6 text-center text-gray-400">No sales on this date</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function MonthlySalesReport({ data }: { data: MonthlySalesData }) {
+  return (
+    <div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 bg-gray-50 border-b">
+        <div><p className="text-xs text-gray-500">Month</p><p className="font-semibold">{data.month}</p></div>
+        <div><p className="text-xs text-gray-500">Transactions</p><p className="font-semibold">{data.summary.transaction_count}</p></div>
+        <div><p className="text-xs text-gray-500">Revenue</p><p className="font-semibold">${data.summary.total_revenue.toFixed(2)}</p></div>
+        <div><p className="text-xs text-gray-500">Tax Collected</p><p className="font-semibold">${data.summary.total_tax.toFixed(2)}</p></div>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 border-b"><tr>
+            <th className="text-left px-4 py-2">Date</th><th className="text-right px-4 py-2">Transactions</th><th className="text-right px-4 py-2">Revenue</th>
+          </tr></thead>
+          <tbody className="divide-y divide-gray-100">
+            {data.dailyTotals.map((d, i) => (
+              <tr key={i}><td className="px-4 py-2">{d.date}</td>
+                <td className="px-4 py-2 text-right">{d.transactions}</td>
+                <td className="px-4 py-2 text-right font-medium">${d.revenue.toFixed(2)}</td></tr>
+            ))}
+            {data.dailyTotals.length === 0 && <tr><td colSpan={3} className="px-4 py-6 text-center text-gray-400">No sales this month</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function ProductSalesReport({ data }: { data: ProductSalesItem[] }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead className="bg-gray-50 border-b"><tr>
+          <th className="text-left px-4 py-2">Product</th><th className="text-left px-4 py-2">SKU</th>
+          <th className="text-left px-4 py-2">Category</th><th className="text-right px-4 py-2">Units Sold</th><th className="text-right px-4 py-2">Revenue</th>
+        </tr></thead>
+        <tbody className="divide-y divide-gray-100">
+          {data.map((p) => (
+            <tr key={p.id}><td className="px-4 py-2 font-medium">{p.name}</td><td className="px-4 py-2 text-gray-500">{p.sku}</td>
+              <td className="px-4 py-2 text-gray-500">{p.category_name || '-'}</td>
+              <td className="px-4 py-2 text-right">{p.units_sold}</td><td className="px-4 py-2 text-right font-medium">${p.revenue.toFixed(2)}</td></tr>
+          ))}
+          {data.length === 0 && <tr><td colSpan={5} className="px-4 py-6 text-center text-gray-400">No product sales data</td></tr>}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function StockReport({ data }: { data: StockReportItem[] }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead className="bg-gray-50 border-b"><tr>
+          <th className="text-left px-4 py-2">Product</th><th className="text-left px-4 py-2">SKU</th>
+          <th className="text-left px-4 py-2">Category</th><th className="text-right px-4 py-2">Stock</th>
+          <th className="text-right px-4 py-2">Reorder Lvl</th><th className="text-center px-4 py-2">Status</th>
+        </tr></thead>
+        <tbody className="divide-y divide-gray-100">
+          {data.map((p) => (
+            <tr key={p.id}><td className="px-4 py-2 font-medium">{p.name}</td><td className="px-4 py-2 text-gray-500">{p.sku}</td>
+              <td className="px-4 py-2 text-gray-500">{p.category_name || '-'}</td>
+              <td className="px-4 py-2 text-right font-semibold">{p.stock_qty}</td>
+              <td className="px-4 py-2 text-right">{p.reorder_level}</td>
+              <td className="px-4 py-2 text-center">
+                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                  p.stock_status === 'In Stock' ? 'bg-green-100 text-green-700' :
+                  p.stock_status === 'Low Stock' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'
+                }`}>{p.stock_status}</span>
+              </td></tr>
+          ))}
+          {data.length === 0 && <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">No stock data</td></tr>}
+        </tbody>
+      </table>
+    </div>
+  );
+}

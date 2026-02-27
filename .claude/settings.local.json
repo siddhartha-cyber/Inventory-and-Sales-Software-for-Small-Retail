@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "mcp__Claude_Preview__preview_start"
+      "mcp__Claude_Preview__preview_start",
+      "Bash(git -C \"/c/Users/User/Desktop/Github/Inventory-and-Sales-Software-for-Small-Retail\" log --oneline)"
     ]
   }
 }
