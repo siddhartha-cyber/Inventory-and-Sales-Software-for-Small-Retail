@@ -24,8 +24,8 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Data (old server database)
-data/
+# Data (old server database - root level only)
+/data/
 *.db
 *.db-shm
 *.db-wal
